@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #070a0f;
+    color: #f4f4f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Sleek developer scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #090d13;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #232d3d;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #36455d;
+  }
+}
