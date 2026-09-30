@@ -59,7 +59,7 @@ export const AttentionSection: React.FC<AttentionSectionProps> = ({
 
         <span className="text-[11px] font-mono text-zinc-500 group-hover:text-zinc-400">
           {isNeedsMe
-            ? 'Unfinished work, active NEXT, dirty state, or stashes'
+            ? 'Uncommitted work, conflicts, or stashes'
             : isRecent
             ? 'Recently active · Clean working tree'
             : 'No recent activity · Clean'}

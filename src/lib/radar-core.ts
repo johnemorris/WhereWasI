@@ -208,7 +208,7 @@ export function classifyAttention(
 
   if (repo.conflictedCount > 0) {
     reasons.push(
-      `${repo.conflictedCount} conflicted ${repo.conflictedCount === 1 ? 'file' : 'files'}`
+      `${repo.conflictedCount} conflicted`
     );
   }
 
@@ -249,6 +249,64 @@ export function classifyAttention(
     group: 'IDLE',
     reasons: ['No recent activity · Clean'],
   };
+}
+
+/**
+ * Formats deterministic classification and working-tree evidence for dashboard rows.
+ *
+ * Rules:
+ * - If clean and has stashes: "Clean · N stash(es)" (e.g. "Clean · 1 stash")
+ * - If clean and no stashes: "Clean"
+ * - If dirty / conflicted: displays only non-zero components joined by " · ":
+ *   e.g. "2 conflicted · 3 modified · 1 untracked · 1 stash"
+ *   e.g. "2 modified · 3 untracked"
+ *   e.g. "1 modified · 1 stash"
+ *   e.g. "2 conflicted"
+ *   e.g. "3 staged"
+ * - NEXT has zero influence and never appears in evidence.
+ */
+export function formatDashboardEvidence(repo: {
+  isClean: boolean;
+  conflictedCount: number;
+  modifiedCount: number;
+  stagedCount: number;
+  untrackedCount: number;
+  deletedCount: number;
+  stashCount: number;
+  error?: string | null;
+}): string {
+  if (repo.error) {
+    return 'Git warning';
+  }
+
+  if (repo.isClean) {
+    if (repo.stashCount > 0) {
+      return `Clean · ${repo.stashCount} stash${repo.stashCount === 1 ? '' : 'es'}`;
+    }
+    return 'Clean';
+  }
+
+  const parts: string[] = [];
+  if (repo.conflictedCount > 0) {
+    parts.push(`${repo.conflictedCount} conflicted`);
+  }
+  if (repo.modifiedCount > 0) {
+    parts.push(`${repo.modifiedCount} modified`);
+  }
+  if (repo.stagedCount > 0) {
+    parts.push(`${repo.stagedCount} staged`);
+  }
+  if (repo.untrackedCount > 0) {
+    parts.push(`${repo.untrackedCount} untracked`);
+  }
+  if (repo.deletedCount > 0) {
+    parts.push(`${repo.deletedCount} deleted`);
+  }
+  if (repo.stashCount > 0) {
+    parts.push(`${repo.stashCount} stash${repo.stashCount === 1 ? '' : 'es'}`);
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : 'Clean';
 }
 
 /**

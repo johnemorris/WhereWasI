@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { RepositoryState } from '../types/radar.js';
+import { formatDashboardEvidence } from '../lib/radar-core.js';
 import { GitBranch, CornerDownRight, Check, X, Edit2, AlertCircle } from 'lucide-react';
 
 interface ProjectRowProps {
@@ -125,36 +126,43 @@ export const ProjectRow: React.FC<ProjectRowProps> = ({
           </div>
         </div>
 
-        {/* Status / Dirty summary */}
+        {/* Status / Classification Evidence */}
         <div className="flex items-center gap-2 text-xs font-mono shrink-0 ml-auto">
           {project.error ? (
             <span className="flex items-center gap-1 text-rose-400 text-[11px]">
               <AlertCircle className="w-3 h-3" />
               <span>Git warning</span>
             </span>
-          ) : project.isClean ? (
-            <span className="text-emerald-400/80 font-normal">Clean</span>
-          ) : (
-            <div className="flex items-center gap-1.5 text-zinc-300 text-[11px]">
-              {project.conflictedCount > 0 && (
-                <span className="text-rose-400 font-semibold">{project.conflictedCount} conflicted</span>
-              )}
-              {project.modifiedCount > 0 && (
-                <span className="text-amber-300">{project.modifiedCount} modified</span>
-              )}
-              {project.untrackedCount > 0 && (
-                <span className="text-zinc-400">{project.untrackedCount} untracked</span>
-              )}
-              {project.stagedCount > 0 && (
-                <span className="text-emerald-400">{project.stagedCount} staged</span>
-              )}
-              {project.stashCount > 0 && (
-                <span className="text-blue-300 bg-blue-950/60 px-1 rounded border border-blue-800/50">
-                  {project.stashCount} stash
-                </span>
-              )}
-            </div>
-          )}
+          ) : (() => {
+              const evidence = project.dashboardEvidence || formatDashboardEvidence(project);
+              if (evidence === 'Clean') {
+                return <span className="text-emerald-400/80 font-normal text-[11px]">Clean</span>;
+              }
+              const tokens = evidence.split(' · ');
+              return (
+                <div className="flex items-center gap-1 text-[11px]">
+                  {tokens.map((token, idx) => {
+                    let colorClass = 'text-zinc-300';
+                    if (token === 'Clean') colorClass = 'text-emerald-400/90 font-normal';
+                    else if (token.includes('conflicted')) colorClass = 'text-rose-400 font-semibold';
+                    else if (token.includes('modified')) colorClass = 'text-amber-300 font-medium';
+                    else if (token.includes('staged')) colorClass = 'text-emerald-400 font-medium';
+                    else if (token.includes('untracked')) colorClass = 'text-zinc-400';
+                    else if (token.includes('deleted')) colorClass = 'text-rose-300';
+                    else if (token.includes('stash'))
+                      colorClass =
+                        'text-blue-300 bg-blue-950/60 px-1 py-0.5 rounded border border-blue-800/50';
+
+                    return (
+                      <React.Fragment key={idx}>
+                        {idx > 0 && <span className="text-zinc-600 px-0.5">·</span>}
+                        <span className={colorClass}>{token}</span>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              );
+            })()}
         </div>
       </div>
 

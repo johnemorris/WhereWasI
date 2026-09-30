@@ -170,6 +170,70 @@ export async function ensureSampleRepositories(): Promise<string> {
     });
   }
 
+  // 5. RunawayIntelligence-News (Clean working tree + 1 stash, branch feat/rotating-event-horizon-v2, no NEXT)
+  const repo5 = path.join(sampleDir, 'RunawayIntelligence-News');
+  try {
+    await fs.stat(path.join(repo5, '.git'));
+  } catch {
+    await fs.mkdir(path.join(repo5, 'src/shaders'), { recursive: true });
+    await fs.writeFile(
+      path.join(repo5, 'README.md'),
+      '# RunawayIntelligence-News\n\nDaily machine intelligence visualization dispatch.\n'
+    );
+    await fs.writeFile(
+      path.join(repo5, 'src/shaders/horizon.glsl'),
+      '// Event horizon shader\nvoid main() {}\n'
+    );
+    await runCmd('git', ['init', '-b', 'main'], repo5);
+    await runCmd('git', ['config', 'user.name', 'Dev User'], repo5);
+    await runCmd('git', ['config', 'user.email', 'dev@example.com'], repo5);
+    await runCmd('git', ['add', '.'], repo5);
+
+    const baseDate = '2026-09-20T10:00:00Z';
+    await execFileAsync('git', ['commit', '-m', 'Initial news layout and space assets'], {
+      cwd: repo5,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: baseDate,
+        GIT_COMMITTER_DATE: baseDate,
+      },
+    });
+
+    await runCmd('git', ['checkout', '-b', 'feat/rotating-event-horizon-v2'], repo5);
+    await fs.writeFile(
+      path.join(repo5, 'src/shaders/earth.glsl'),
+      '// Earth rotation and lighting\nuniform float uTime;\n'
+    );
+    const date2 = '2026-09-22T14:00:00Z';
+    await execFileAsync('git', ['add', '.'], { cwd: repo5 });
+    await execFileAsync('git', ['commit', '-m', 'Add Earth rotation, lighting, and compositing'], {
+      cwd: repo5,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: date2,
+        GIT_COMMITTER_DATE: date2,
+      },
+    });
+
+    await fs.appendFile(
+      path.join(repo5, 'src/shaders/horizon.glsl'),
+      '// Gravitational lensing calculations\n'
+    );
+    const date3 = '2026-09-24T16:45:00Z';
+    await execFileAsync('git', ['commit', '-am', 'Refine event horizon rotation geometry'], {
+      cwd: repo5,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: date3,
+        GIT_COMMITTER_DATE: date3,
+      },
+    });
+
+    // Create a stash and leave working tree 100% clean
+    await fs.appendFile(path.join(repo5, 'src/shaders/horizon.glsl'), '// WIP: flare draft\n');
+    await runCmd('git', ['stash', 'push', '-m', 'WIP: atmospheric lens flare pass'], repo5);
+  }
+
   // Ensure sampleDir is registered as a scan root if no roots exist yet
   const config = await storage.getConfig();
   if (config.scanRoots.length === 0) {

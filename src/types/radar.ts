@@ -51,6 +51,7 @@ export interface RepositoryState {
   changedFiles: GitChangedFile[];
   attentionGroup: AttentionGroup;
   needsMeReasons: string[];
+  dashboardEvidence?: string;
   next: string | null;
   nextUpdatedAt: string | null;
   lastSeen: LastSeenState | null;

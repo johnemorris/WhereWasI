@@ -2,6 +2,7 @@ import assert from 'assert';
 import {
   parsePorcelainV2,
   classifyAttention,
+  formatDashboardEvidence,
   computeSinceLastLooked,
 } from '../src/lib/radar-core.js';
 
@@ -183,8 +184,132 @@ u UU N... 100644 100644 100644 100644 c3d4e5f f6g7h8i g7h8i9j conflict.ts
   };
   const result = classifyAttention(repo, null, 7);
   assert.strictEqual(result.group, 'NEEDS_ME');
-  assert(result.reasons.some((r) => r.includes('1 conflicted file')));
+  assert(result.reasons.some((r) => r.includes('1 conflicted')));
   console.log('✓ TEST 8 passed: Conflict => NEEDS_ME');
+}
+
+// -------------------------------------------------------------
+// Dashboard Evidence Formatting Tests
+// -------------------------------------------------------------
+
+// EVIDENCE 1: Clean + stash 1 => "Clean · 1 stash"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: true,
+    conflictedCount: 0,
+    modifiedCount: 0,
+    stagedCount: 0,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 1,
+  });
+  assert.strictEqual(evidence, 'Clean · 1 stash');
+  console.log('✓ Evidence Test 1 passed: Clean + stash 1 => Clean · 1 stash');
+}
+
+// EVIDENCE 2: Modified 2 + untracked 3 => "2 modified · 3 untracked"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: false,
+    conflictedCount: 0,
+    modifiedCount: 2,
+    stagedCount: 0,
+    untrackedCount: 3,
+    deletedCount: 0,
+    stashCount: 0,
+  });
+  assert.strictEqual(evidence, '2 modified · 3 untracked');
+  console.log('✓ Evidence Test 2 passed: Modified 2 + untracked 3 => 2 modified · 3 untracked');
+}
+
+// EVIDENCE 3: Modified 1 + stash 1 => "1 modified · 1 stash"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: false,
+    conflictedCount: 0,
+    modifiedCount: 1,
+    stagedCount: 0,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 1,
+  });
+  assert.strictEqual(evidence, '1 modified · 1 stash');
+  console.log('✓ Evidence Test 3 passed: Modified 1 + stash 1 => 1 modified · 1 stash');
+}
+
+// EVIDENCE 4: Conflict 2 => clearly exposes "2 conflicted"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: false,
+    conflictedCount: 2,
+    modifiedCount: 0,
+    stagedCount: 0,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 0,
+  });
+  assert.strictEqual(evidence, '2 conflicted');
+  console.log('✓ Evidence Test 4 passed: Conflict 2 => 2 conflicted');
+}
+
+// EVIDENCE 5: Clean recently active => "Clean"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: true,
+    conflictedCount: 0,
+    modifiedCount: 0,
+    stagedCount: 0,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 0,
+  });
+  assert.strictEqual(evidence, 'Clean');
+  console.log('✓ Evidence Test 5 passed: Clean recently active => Clean');
+}
+
+// EVIDENCE 6: Clean idle => "Clean"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: true,
+    conflictedCount: 0,
+    modifiedCount: 0,
+    stagedCount: 0,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 0,
+  });
+  assert.strictEqual(evidence, 'Clean');
+  console.log('✓ Evidence Test 6 passed: Clean idle => Clean');
+}
+
+// EVIDENCE 7: Staged 3 => "3 staged"
+{
+  const evidence = formatDashboardEvidence({
+    isClean: false,
+    conflictedCount: 0,
+    modifiedCount: 0,
+    stagedCount: 3,
+    untrackedCount: 0,
+    deletedCount: 0,
+    stashCount: 0,
+  });
+  assert.strictEqual(evidence, '3 staged');
+  console.log('✓ Evidence Test 7 passed: Staged 3 => 3 staged');
+}
+
+// EVIDENCE 8: Mixed (2 modified · 1 untracked · 1 stash)
+{
+  const evidence = formatDashboardEvidence({
+    isClean: false,
+    conflictedCount: 0,
+    modifiedCount: 2,
+    stagedCount: 0,
+    untrackedCount: 1,
+    deletedCount: 0,
+    stashCount: 1,
+  });
+  assert.strictEqual(evidence, '2 modified · 1 untracked · 1 stash');
+  console.log('✓ Evidence Test 8 passed: Mixed 2 modified · 1 untracked · 1 stash');
 }
 
 // "Since you last looked" delta logic
@@ -220,4 +345,4 @@ u UU N... 100644 100644 100644 100644 c3d4e5f f6g7h8i g7h8i9j conflict.ts
   console.log('✓ Delta / "Since you last looked" test passed');
 }
 
-console.log('--- ALL UNIT TESTS (INCLUDING TESTS 1 TO 8) PASSED SUCCESSFULLY ---');
+console.log('--- ALL UNIT TESTS (CLASSIFICATION & EVIDENCE) PASSED SUCCESSFULLY ---');

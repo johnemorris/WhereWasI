@@ -6,6 +6,7 @@ import type { GitCommit, RepositoryState } from '../src/types/radar.js';
 import {
   classifyAttention,
   computeSinceLastLooked,
+  formatDashboardEvidence,
   formatRelativeTime,
   parsePorcelainV2,
 } from '../src/lib/radar-core.js';
@@ -67,6 +68,25 @@ export async function getRepositoryState(
       '--show-stash',
     ]);
     const parsed = parsePorcelainV2(statusOutput);
+
+    // In Git versions < 2.37, porcelain v2 does not emit `# stash N` even with `--show-stash`.
+    // Query refs/stash safely as a fallback:
+    if (parsed.stashCount === 0) {
+      try {
+        const stashOut = await runGit(resolvedPath, [
+          'rev-list',
+          '--walk-reflogs',
+          '--count',
+          'refs/stash',
+        ]);
+        const count = parseInt(stashOut.trim(), 10);
+        if (!isNaN(count) && count > 0) {
+          parsed.stashCount = count;
+        }
+      } catch {
+        // No refs/stash exists, stashCount remains 0
+      }
+    }
 
     // 2. Git log (recent 10 commits)
     const recentCommits: GitCommit[] = [];
@@ -150,6 +170,16 @@ export async function getRepositoryState(
       config.idleThresholdDays
     );
 
+    const dashboardEvidence = formatDashboardEvidence({
+      isClean,
+      conflictedCount: parsed.conflictedCount,
+      modifiedCount: parsed.modifiedCount,
+      stagedCount: parsed.stagedCount,
+      untrackedCount: parsed.untrackedCount,
+      deletedCount: parsed.deletedCount,
+      stashCount: parsed.stashCount,
+    });
+
     // 5. Since you last looked delta
     const sinceLastLooked = computeSinceLastLooked(
       {
@@ -191,6 +221,7 @@ export async function getRepositoryState(
       changedFiles: parsed.changedFiles,
       attentionGroup: group,
       needsMeReasons: reasons,
+      dashboardEvidence,
       next: nextNote,
       nextUpdatedAt,
       lastSeen,
