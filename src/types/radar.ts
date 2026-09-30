@@ -24,6 +24,34 @@ export interface LastSeenState {
 
 export type AttentionGroup = 'NEEDS_ME' | 'RECENTLY_ACTIVE' | 'IDLE';
 
+export type ActivitySourceType =
+  | 'git'
+  | 'codex'
+  | 'chatgpt'
+  | 'claude'
+  | 'antigravity';
+
+export interface ProjectActivitySource {
+  id: string;
+  type: ActivitySourceType;
+  displayName: string;
+}
+
+export interface HarnessActivity {
+  sourceId: string;
+  sourceType: ActivitySourceType;
+  displayName: string;
+  projectPath?: string;
+  externalProjectName?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  lastUserInteractionAt?: string;
+  lastAgentInteractionAt?: string;
+  lastUserInteractionType?: 'prompt' | 'message' | 'ack';
+  lastUserText?: string;
+  hasAgentResponseAfterLastUserInteraction?: boolean;
+}
+
 export interface RepositoryState {
   id: string;
   name: string;
@@ -52,6 +80,7 @@ export interface RepositoryState {
   attentionGroup: AttentionGroup;
   needsMeReasons: string[];
   dashboardEvidence?: string;
+  harnessActivities?: HarnessActivity[];
   next: string | null;
   nextUpdatedAt: string | null;
   lastSeen: LastSeenState | null;
@@ -65,6 +94,7 @@ export interface RadarConfig {
   idleThresholdDays: number;
   nextNotes: Record<string, { text: string; updatedAt: string }>;
   lastSeen: Record<string, LastSeenState>;
+  sourceAssociations?: Record<string, string[]>;
 }
 
 export interface ScanResult {

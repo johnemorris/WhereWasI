@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { RepositoryState } from '../types/radar.js';
-import { formatDashboardEvidence } from '../lib/radar-core.js';
-import { GitBranch, CornerDownRight, Check, X, Edit2, AlertCircle } from 'lucide-react';
+import { formatDashboardEvidence, formatHarnessSummary } from '../lib/radar-core.js';
+import { GitBranch, CornerDownRight, Check, X, Edit2, AlertCircle, Bot } from 'lucide-react';
 
 interface ProjectRowProps {
   project: RepositoryState;
@@ -165,6 +165,31 @@ export const ProjectRow: React.FC<ProjectRowProps> = ({
             })()}
         </div>
       </div>
+
+      {/* Harness Activity line (e.g. Codex, ChatGPT) if associated */}
+      {project.harnessActivities && project.harnessActivities.length > 0 && (
+        <div className="flex items-center gap-2 text-xs font-mono py-1 px-2 rounded bg-[#0b1019]/70 border border-[#1b2536] text-zinc-300">
+          {project.harnessActivities.slice(0, 1).map((harness, i) => {
+            const summary = formatHarnessSummary(harness);
+            return (
+              <div key={i} className="flex items-center gap-2 truncate w-full text-[11px]">
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-950/70 text-sky-300 border border-sky-800/50 font-semibold shrink-0">
+                  <Bot className="w-3 h-3 text-sky-400" />
+                  <span>{summary.sourceName} · {summary.relativeTime}</span>
+                </span>
+                <span className="text-zinc-200 font-medium shrink-0">
+                  {summary.statusLabel}
+                </span>
+                {summary.previewText && (
+                  <span className="text-zinc-400 truncate">
+                    &ldquo;{summary.previewText}&rdquo;
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Middle line: NEXT breadcrumb (Prominent & Inline Editable) */}
       <div

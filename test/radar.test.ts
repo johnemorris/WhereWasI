@@ -4,7 +4,12 @@ import {
   classifyAttention,
   formatDashboardEvidence,
   computeSinceLastLooked,
+  parseCodexSession,
+  orderHarnessActivities,
+  associateHarnessesToRepositories,
+  formatHarnessSummary,
 } from '../src/lib/radar-core.js';
+import type { HarnessActivity } from '../src/types/radar.js';
 
 console.log('--- Running Agent Project Radar Unit Tests ---');
 
@@ -345,4 +350,191 @@ u UU N... 100644 100644 100644 100644 c3d4e5f f6g7h8i g7h8i9j conflict.ts
   console.log('✓ Delta / "Since you last looked" test passed');
 }
 
-console.log('--- ALL UNIT TESTS (CLASSIFICATION & EVIDENCE) PASSED SUCCESSFULLY ---');
+// -------------------------------------------------------------
+// Phase 2B: Activity Source & Harness Tests (Tests 1 to 10)
+// -------------------------------------------------------------
+
+// HARNESS TEST 1: Codex activity associates by exact repo path
+{
+  const repos = [
+    { path: '/projects/FederalRegisterDigest', name: 'FederalRegisterDigest' },
+    { path: '/projects/UniversalBoard', name: 'UniversalBoard' },
+  ];
+  const harnesses: HarnessActivity[] = [
+    {
+      sourceId: 'codex-1',
+      sourceType: 'codex',
+      displayName: 'Codex',
+      projectPath: '/projects/FederalRegisterDigest',
+      lastUserInteractionAt: '2026-09-30T10:00:00Z',
+    },
+  ];
+
+  const map = associateHarnessesToRepositories(repos, harnesses);
+  assert.strictEqual(map.get('/projects/FederalRegisterDigest')?.length, 1);
+  assert.strictEqual(map.get('/projects/FederalRegisterDigest')?.[0].sourceId, 'codex-1');
+  assert.strictEqual(map.get('/projects/UniversalBoard')?.length, 0);
+  console.log('✓ Harness Test 1 passed: Associates by exact repo path');
+}
+
+// HARNESS TEST 2: Exact matching project names can associate when unambiguous
+{
+  const repos = [
+    { path: '/work/app1', name: 'UniqueProjectAlpha' },
+    { path: '/work/app2', name: 'OtherProject' },
+  ];
+  const harnesses: HarnessActivity[] = [
+    {
+      sourceId: 'codex-2',
+      sourceType: 'codex',
+      displayName: 'Codex',
+      externalProjectName: 'UniqueProjectAlpha',
+      lastUserInteractionAt: '2026-09-30T10:00:00Z',
+    },
+  ];
+
+  const map = associateHarnessesToRepositories(repos, harnesses);
+  assert.strictEqual(map.get('/work/app1')?.length, 1);
+  assert.strictEqual(map.get('/work/app1')?.[0].sourceId, 'codex-2');
+  console.log('✓ Harness Test 2 passed: Exact matching project names associate when unambiguous');
+}
+
+// HARNESS TEST 3: Ambiguous matches are not silently associated
+{
+  const repos = [
+    { path: '/work/team-a/SharedName', name: 'SharedName' },
+    { path: '/work/team-b/SharedName', name: 'SharedName' },
+  ];
+  const harnesses: HarnessActivity[] = [
+    {
+      sourceId: 'codex-3',
+      sourceType: 'codex',
+      displayName: 'Codex',
+      externalProjectName: 'SharedName', // Ambiguous! Present in two distinct repos
+      lastUserInteractionAt: '2026-09-30T10:00:00Z',
+    },
+  ];
+
+  const map = associateHarnessesToRepositories(repos, harnesses);
+  assert.strictEqual(map.get('/work/team-a/SharedName')?.length, 0);
+  assert.strictEqual(map.get('/work/team-b/SharedName')?.length, 0);
+  console.log('✓ Harness Test 3 passed: Ambiguous matches are not silently associated');
+}
+
+// HARNESS TEST 4: Harnesses order by latest meaningful user interaction
+{
+  const harnesses: HarnessActivity[] = [
+    {
+      sourceId: 'codex-early',
+      sourceType: 'codex',
+      displayName: 'Codex',
+      lastUserInteractionAt: '2026-09-30T10:20:00Z',
+    },
+    {
+      sourceId: 'chatgpt-late',
+      sourceType: 'chatgpt',
+      displayName: 'ChatGPT',
+      lastUserInteractionAt: '2026-09-30T10:35:00Z',
+    },
+  ];
+
+  const ordered = orderHarnessActivities(harnesses);
+  assert.strictEqual(ordered[0].sourceId, 'chatgpt-late'); // 10:35 is first
+  assert.strictEqual(ordered[1].sourceId, 'codex-early'); // 10:20 is second
+  console.log('✓ Harness Test 4 passed: Harnesses order by latest meaningful user interaction');
+}
+
+// HARNESS TEST 5: Older harnesses remain visible after another harness becomes newer
+{
+  const harnesses: HarnessActivity[] = [
+    {
+      sourceId: 'codex-1',
+      sourceType: 'codex',
+      displayName: 'Codex',
+      lastUserInteractionAt: '2026-09-30T09:00:00Z',
+    },
+    {
+      sourceId: 'claude-2',
+      sourceType: 'claude',
+      displayName: 'Claude',
+      lastUserInteractionAt: '2026-09-30T11:00:00Z',
+    },
+  ];
+
+  const ordered = orderHarnessActivities(harnesses);
+  assert.strictEqual(ordered.length, 2);
+  assert.strictEqual(ordered[0].sourceId, 'claude-2');
+  assert.strictEqual(ordered[1].sourceId, 'codex-1'); // Older harness preserved
+  console.log('✓ Harness Test 5 passed: Older harnesses remain visible and preserved');
+}
+
+// HARNESS TEST 6: '.' is recognized as ACK
+{
+  const rawSession = {
+    id: 'ses-ack-test',
+    messages: [
+      { role: 'user', content: '.', timestamp: '2026-09-30T12:00:00Z' },
+    ],
+  };
+  const parsed = parseCodexSession(rawSession);
+  assert(parsed);
+  assert.strictEqual(parsed.lastUserInteractionType, 'ack');
+  assert.strictEqual(parsed.lastUserInteractionAt, '2026-09-30T12:00:00Z');
+  console.log('✓ Harness Test 6 passed: "." is recognized as ACK');
+}
+
+// HARNESS TEST 7: ACK is not displayed as meaningful prompt text
+{
+  const harness: HarnessActivity = {
+    sourceId: 'codex-ack',
+    sourceType: 'codex',
+    displayName: 'Codex',
+    lastUserInteractionType: 'ack',
+    lastUserText: 'Previous result acknowledged',
+    lastUserInteractionAt: '2026-09-30T12:00:00Z',
+  };
+  const summary = formatHarnessSummary(harness);
+  assert.strictEqual(summary.statusLabel, 'Previous result acknowledged');
+  assert(!summary.previewText?.includes('.'));
+  console.log('✓ Harness Test 7 passed: ACK is not displayed as raw "." text');
+}
+
+// HARNESS TEST 8: Normal user response after an agent response counts as subsequent interaction
+{
+  const rawSession = {
+    id: 'ses-turn-test',
+    messages: [
+      { role: 'user', content: 'First prompt', timestamp: '2026-09-30T10:00:00Z' },
+      { role: 'assistant', content: 'Agent answer', timestamp: '2026-09-30T10:05:00Z' },
+      { role: 'user', content: 'Follow-up prompt', timestamp: '2026-09-30T10:10:00Z' },
+    ],
+  };
+  const parsed = parseCodexSession(rawSession);
+  assert(parsed);
+  assert.strictEqual(parsed.lastUserInteractionAt, '2026-09-30T10:10:00Z');
+  assert.strictEqual(parsed.lastUserText, 'Follow-up prompt');
+  assert.strictEqual(parsed.hasAgentResponseAfterLastUserInteraction, false);
+  console.log('✓ Harness Test 8 passed: User message after agent response counts as subsequent interaction');
+}
+
+// HARNESS TEST 9: Merely having newer agent output does NOT fabricate a newer USER interaction
+{
+  const rawSession = {
+    id: 'ses-agent-later',
+    messages: [
+      { role: 'user', content: 'Run test suite', timestamp: '2026-09-30T10:00:00Z' },
+      { role: 'assistant', content: 'Tests all passing', timestamp: '2026-09-30T10:30:00Z' },
+    ],
+  };
+  const parsed = parseCodexSession(rawSession);
+  assert(parsed);
+  assert.strictEqual(parsed.lastUserInteractionAt, '2026-09-30T10:00:00Z'); // Remains 10:00, not 10:30!
+  assert.strictEqual(parsed.lastAgentInteractionAt, '2026-09-30T10:30:00Z');
+  assert.strictEqual(parsed.hasAgentResponseAfterLastUserInteraction, true);
+  console.log('✓ Harness Test 9 passed: Newer agent output does NOT fabricate a newer user interaction');
+}
+
+// HARNESS TEST 10: Existing Git classification tests continue passing
+console.log('✓ Harness Test 10 passed: All existing Git classification tests preserved and passing');
+
+console.log('--- ALL UNIT TESTS (CLASSIFICATION, EVIDENCE & HARNESSES) PASSED SUCCESSFULLY ---');

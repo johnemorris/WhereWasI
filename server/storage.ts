@@ -112,6 +112,21 @@ export class RadarStorage {
     await this.save();
     return this.config.idleThresholdDays;
   }
+
+  async associateSource(repoPath: string, sourceOrSessionId: string): Promise<void> {
+    await this.init();
+    const resolved = path.resolve(repoPath);
+    if (!this.config.sourceAssociations) {
+      this.config.sourceAssociations = {};
+    }
+    if (!this.config.sourceAssociations[resolved]) {
+      this.config.sourceAssociations[resolved] = [];
+    }
+    if (!this.config.sourceAssociations[resolved].includes(sourceOrSessionId)) {
+      this.config.sourceAssociations[resolved].push(sourceOrSessionId);
+      await this.save();
+    }
+  }
 }
 
 export const storage = new RadarStorage();

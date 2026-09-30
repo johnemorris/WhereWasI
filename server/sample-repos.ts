@@ -234,6 +234,88 @@ export async function ensureSampleRepositories(): Promise<string> {
     await runCmd('git', ['stash', 'push', '-m', 'WIP: atmospheric lens flare pass'], repo5);
   }
 
+  // 6. Ensure sample Codex session fixtures exist for dogfood testing
+  try {
+    const codexDir1 = path.join(repo1, '.codex', 'sessions');
+    await fs.mkdir(codexDir1, { recursive: true });
+    const now = Date.now();
+    const time42mAgo = new Date(now - 42 * 60 * 1000).toISOString();
+    const time40mAgo = new Date(now - 40 * 60 * 1000).toISOString();
+
+    await fs.writeFile(
+      path.join(codexDir1, 'session-retention.json'),
+      JSON.stringify(
+        {
+          id: 'ses_fed_reg_01',
+          title: 'Source-neutral retention refactor',
+          cwd: repo1,
+          createdAt: time42mAgo,
+          updatedAt: time40mAgo,
+          messages: [
+            {
+              role: 'user',
+              content: 'Implement source-neutral retention after reviewing the Phase 0 report.',
+              timestamp: time42mAgo,
+            },
+            {
+              role: 'assistant',
+              content: 'I have analyzed the Phase 0 report and proposed the new retention rules.',
+              timestamp: time40mAgo,
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+
+    const codexDir2 = path.join(repo2, '.codex', 'sessions');
+    await fs.mkdir(codexDir2, { recursive: true });
+    const time5mAgo = new Date(now - 5 * 60 * 1000).toISOString();
+    const time4mAgo = new Date(now - 4 * 60 * 1000).toISOString();
+    const time3mAgo = new Date(now - 3 * 60 * 1000).toISOString();
+    const time2mAgo = new Date(now - 2 * 60 * 1000).toISOString();
+
+    await fs.writeFile(
+      path.join(codexDir2, 'session-ack.json'),
+      JSON.stringify(
+        {
+          id: 'ses_lowbi_ack_02',
+          title: 'Opportunity lifecycle verification',
+          cwd: repo2,
+          createdAt: time5mAgo,
+          updatedAt: time2mAgo,
+          messages: [
+            {
+              role: 'user',
+              content: 'Can you check the commercial cleaning opportunity rules?',
+              timestamp: time5mAgo,
+            },
+            {
+              role: 'assistant',
+              content: 'Rules verified and test suite ready.',
+              timestamp: time4mAgo,
+            },
+            {
+              role: 'user',
+              content: '.',
+              timestamp: time3mAgo,
+            },
+            {
+              role: 'assistant',
+              content: 'Acknowledged. Standing by for next command.',
+              timestamp: time2mAgo,
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+  } catch (err) {
+    console.warn('Notice: Sample codex fixture creation skipped:', err);
+  }
+
   // Ensure sampleDir is registered as a scan root if no roots exist yet
   const config = await storage.getConfig();
   if (config.scanRoots.length === 0) {

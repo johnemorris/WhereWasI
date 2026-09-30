@@ -3,6 +3,7 @@ import type {
   GitChangedFile,
   LastSeenState,
   RepositoryState,
+  HarnessActivity,
 } from '../types/radar.js';
 
 /**
@@ -406,4 +407,217 @@ export function formatRelativeTime(isoDate: string): string {
 
   const diffYears = Math.floor(diffDays / 365);
   return `${diffYears}y`;
+}
+
+/**
+ * Parses a Codex session record (JSON or JSONL item) into a normalized HarnessActivity.
+ * Recognizes '.' as an acknowledgment (ACK), extracting timestamps and user prompts accurately.
+ */
+export function parseCodexSession(
+  raw: any,
+  sourceId: string = 'codex'
+): HarnessActivity | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const sessionId = String(raw.id || raw.sessionId || '');
+  const sessionTitle = raw.title || raw.sessionTitle || undefined;
+  const projectPath = raw.cwd || raw.workspacePath || raw.projectPath || undefined;
+  const externalProjectName =
+    raw.projectName ||
+    (projectPath ? projectPath.split(/[/\\]/).filter(Boolean).pop() : undefined);
+
+  let lastUserInteractionAt: string | undefined;
+  let lastAgentInteractionAt: string | undefined;
+  let lastUserText: string | undefined;
+  let lastUserInteractionType: 'prompt' | 'message' | 'ack' | undefined;
+
+  const messages = Array.isArray(raw.messages)
+    ? raw.messages
+    : Array.isArray(raw.history)
+    ? raw.history
+    : [];
+
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object') continue;
+    const role = String(msg.role || msg.type || '').toLowerCase();
+    const content = typeof msg.content === 'string' ? msg.content : String(msg.text || '');
+    const ts = msg.timestamp || msg.createdAt || msg.time;
+
+    if (role === 'user' || role === 'human') {
+      const trimmed = content.trim();
+      if (ts) {
+        lastUserInteractionAt = ts;
+      }
+      if (trimmed === '.') {
+        lastUserInteractionType = 'ack';
+        lastUserText = 'Previous result acknowledged';
+      } else {
+        lastUserInteractionType = 'prompt';
+        lastUserText = trimmed;
+      }
+    } else if (role === 'assistant' || role === 'agent' || role === 'bot') {
+      if (ts) {
+        lastAgentInteractionAt = ts;
+      }
+    }
+  }
+
+  // Fallbacks if timestamps in messages are missing but session has updatedAt
+  if (!lastUserInteractionAt && raw.updatedAt) {
+    lastUserInteractionAt = raw.updatedAt;
+  }
+
+  const hasAgentResponseAfterLastUserInteraction = Boolean(
+    lastUserInteractionAt &&
+    lastAgentInteractionAt &&
+    new Date(lastAgentInteractionAt).getTime() > new Date(lastUserInteractionAt).getTime()
+  );
+
+  return {
+    sourceId: sourceId || `codex-${sessionId}`,
+    sourceType: 'codex',
+    displayName: 'Codex',
+    projectPath,
+    externalProjectName,
+    sessionId: sessionId || undefined,
+    sessionTitle,
+    lastUserInteractionAt,
+    lastAgentInteractionAt,
+    lastUserInteractionType,
+    lastUserText,
+    hasAgentResponseAfterLastUserInteraction,
+  };
+}
+
+/**
+ * Orders harness activities within a logical project by the latest meaningful user interaction.
+ * Older harnesses remain visible and preserved in the list.
+ */
+export function orderHarnessActivities(activities: HarnessActivity[]): HarnessActivity[] {
+  return [...activities].sort((a, b) => {
+    const aTime = a.lastUserInteractionAt ? new Date(a.lastUserInteractionAt).getTime() : 0;
+    const bTime = b.lastUserInteractionAt ? new Date(b.lastUserInteractionAt).getTime() : 0;
+    if (bTime !== aTime) {
+      return bTime - aTime;
+    }
+    const aAgent = a.lastAgentInteractionAt ? new Date(a.lastAgentInteractionAt).getTime() : 0;
+    const bAgent = b.lastAgentInteractionAt ? new Date(b.lastAgentInteractionAt).getTime() : 0;
+    return bAgent - aAgent;
+  });
+}
+
+/**
+ * Deterministically associates harness activities with discovered repositories.
+ * Preferred order:
+ * 1. Exact repository/cwd path
+ * 2. Persisted manual association
+ * 3. Exact normalized project name (ONLY when unambiguous across all discovered repos)
+ * 4. Otherwise leave unassociated (never silently guess or fuzzy match)
+ */
+export function associateHarnessesToRepositories(
+  repositories: Array<{ path: string; name: string }>,
+  harnesses: HarnessActivity[],
+  sourceAssociations?: Record<string, string[]>
+): Map<string, HarnessActivity[]> {
+  const result = new Map<string, HarnessActivity[]>();
+  for (const repo of repositories) {
+    result.set(repo.path, []);
+  }
+
+  // Count occurrences of normalized repo names to detect ambiguity
+  const nameCounts = new Map<string, number>();
+  for (const repo of repositories) {
+    const norm = repo.name.trim().toLowerCase();
+    nameCounts.set(norm, (nameCounts.get(norm) || 0) + 1);
+  }
+
+  for (const harness of harnesses) {
+    let matchedRepoPath: string | null = null;
+
+    // 1. Exact path match
+    if (harness.projectPath) {
+      const normHarnessPath = harness.projectPath.replace(/[/\\]+$/, '');
+      const found = repositories.find((r) => r.path.replace(/[/\\]+$/, '') === normHarnessPath);
+      if (found) {
+        matchedRepoPath = found.path;
+      }
+    }
+
+    // 2. Persisted manual association
+    if (!matchedRepoPath && sourceAssociations) {
+      for (const [repoPath, associatedIds] of Object.entries(sourceAssociations)) {
+        if (
+          Array.isArray(associatedIds) &&
+          (associatedIds.includes(harness.sourceId) || (harness.sessionId && associatedIds.includes(harness.sessionId)))
+        ) {
+          matchedRepoPath = repoPath;
+          break;
+        }
+      }
+    }
+
+    // 3. Exact normalized project name (ONLY if completely unambiguous across all repos)
+    if (!matchedRepoPath && harness.externalProjectName) {
+      const normName = harness.externalProjectName.trim().toLowerCase();
+      if (nameCounts.get(normName) === 1) {
+        const found = repositories.find((r) => r.name.trim().toLowerCase() === normName);
+        if (found) {
+          matchedRepoPath = found.path;
+        }
+      }
+    }
+
+    if (matchedRepoPath && result.has(matchedRepoPath)) {
+      result.get(matchedRepoPath)!.push(harness);
+    }
+  }
+
+  // Sort each repository's harness activities by latest meaningful user activity
+  for (const [path, list] of result.entries()) {
+    result.set(path, orderHarnessActivities(list));
+  }
+
+  return result;
+}
+
+/**
+ * Formats a concise harness summary for dashboard rows and project detail views.
+ * If user interaction was '.', displays 'Previous result acknowledged' instead of '.'
+ */
+export function formatHarnessSummary(harness: HarnessActivity): {
+  sourceName: string;
+  relativeTime: string;
+  statusLabel: string;
+  previewText?: string;
+} {
+  const relativeTime = harness.lastUserInteractionAt
+    ? formatRelativeTime(harness.lastUserInteractionAt)
+    : 'Unknown';
+
+  if (harness.lastUserInteractionType === 'ack') {
+    return {
+      sourceName: harness.displayName,
+      relativeTime,
+      statusLabel: 'Previous result acknowledged',
+    };
+  }
+
+  if (harness.lastUserInteractionType === 'prompt' && harness.lastUserText) {
+    const truncated =
+      harness.lastUserText.length > 55
+        ? `${harness.lastUserText.slice(0, 52)}...`
+        : harness.lastUserText;
+    return {
+      sourceName: harness.displayName,
+      relativeTime,
+      statusLabel: 'Prompt submitted',
+      previewText: truncated,
+    };
+  }
+
+  return {
+    sourceName: harness.displayName,
+    relativeTime,
+    statusLabel: harness.lastUserText || 'Active',
+  };
 }

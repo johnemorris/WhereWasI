@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { RepositoryState } from '../types/radar.js';
+import { formatHarnessSummary } from '../lib/radar-core.js';
 import {
   X,
   GitBranch,
@@ -14,6 +15,7 @@ import {
   AlertTriangle,
   ChevronRight,
   ExternalLink,
+  Bot,
 } from 'lucide-react';
 
 interface ProjectDetailModalProps {
@@ -221,6 +223,64 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                 <li className="text-zinc-500 italic">No previous visit recorded.</li>
               )}
             </ul>
+          </div>
+
+          {/* ACTIVITY SOURCES & HARNESSES */}
+          <div className="bg-[#101620] border border-[#202a3a] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-sky-400" />
+                <h3 className="text-xs font-mono font-semibold text-zinc-300 uppercase tracking-wider">
+                  Activity Sources &amp; Harnesses
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-500">Ordered by latest user interaction</span>
+            </div>
+
+            {project.harnessActivities && project.harnessActivities.length > 0 ? (
+              <div className="space-y-2">
+                {project.harnessActivities.map((harness, idx) => {
+                  const summary = formatHarnessSummary(harness);
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 rounded bg-[#0b1018] border border-[#1b2535] text-xs font-mono space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800/60 font-semibold text-[10px]">
+                            {summary.sourceName}
+                          </span>
+                          <span className="text-zinc-200 font-semibold">{harness.sessionTitle || harness.sessionId || 'Session'}</span>
+                        </div>
+                        <span className="text-[11px] text-zinc-400">{summary.relativeTime}</span>
+                      </div>
+
+                      <div className="text-[11px] text-zinc-300 flex items-start gap-1.5">
+                        <span className="text-amber-400/90 font-medium shrink-0">Last User Interaction:</span>
+                        <span>{summary.statusLabel}</span>
+                      </div>
+
+                      {summary.previewText && (
+                        <div className="p-2 rounded bg-[#070b10] border border-zinc-800/80 text-zinc-400 text-[11px] italic">
+                          &ldquo;{summary.previewText}&rdquo;
+                        </div>
+                      )}
+
+                      {harness.hasAgentResponseAfterLastUserInteraction && (
+                        <div className="text-[10px] text-emerald-400/80">
+                          ✓ Agent response followed previous user interaction
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500 italic font-mono">
+                No external harness activity (Codex / ChatGPT) associated yet. Working with physical Git state.
+              </p>
+            )}
           </div>
 
           {/* CURRENT STATE MATRIX */}

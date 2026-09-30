@@ -2,6 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { isGitRepo, getRepositoryState } from './git.js';
 import { storage } from './storage.js';
+import { loadAllCodexSessions } from './codex-source.js';
+import { associateHarnessesToRepositories } from '../src/lib/radar-core.js';
 import type { RepositoryState, ScanResult } from '../src/types/radar.js';
 
 const IGNORED_DIR_NAMES = new Set([
@@ -126,6 +128,26 @@ export async function scanAllRepositories(): Promise<ScanResult> {
 
   // Filter out any undefined slots if errors occurred
   const validProjects = projects.filter((p): p is RepositoryState => Boolean(p));
+
+  // Load and associate Codex & harness activities
+  try {
+    const codexSessions = await loadAllCodexSessions(validProjects.map((p) => p.path));
+    if (codexSessions.length > 0) {
+      const associatedMap = associateHarnessesToRepositories(
+        validProjects.map((p) => ({ path: p.path, name: p.name })),
+        codexSessions,
+        config.sourceAssociations
+      );
+      for (const p of validProjects) {
+        const activities = associatedMap.get(p.path);
+        if (activities && activities.length > 0) {
+          p.harnessActivities = activities;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Notice: Harness activities discovery skipped:', err);
+  }
 
   // Sort projects: NEEDS_ME first, then RECENTLY_ACTIVE, then IDLE. Within group, most recent first.
   validProjects.sort((a, b) => {
